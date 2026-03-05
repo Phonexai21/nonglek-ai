@@ -1,0 +1,17 @@
+{
+  "name": "smart-math-chat-pro-lao",
+  "version": "1.0.0",
+  "description": "Smart Math Chat Pro Lao - AI Math Tutor",
+  "main": "api/gemini.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "type": "module",
+  "engines": {
+    "node": "18.x"
+  }
+}
