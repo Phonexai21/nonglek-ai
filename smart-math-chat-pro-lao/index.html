@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
-        /* CSS เดิมทั้งหมดคงไว้เหมือนเดิม */
         body {
             font-family: 'Noto Sans Lao', sans-serif;
             background-color: #5b21b6; 
@@ -77,13 +76,30 @@
         .bubble-ai { background: #f3f4f6; color: #1f2937; align-self: flex-start; border-bottom-left-radius: 4px; }
         .bubble-user { background: #7c3aed; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
         
-        @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes pop { 
+            from { transform: scale(0.9); opacity: 0; } 
+            to { transform: scale(1); opacity: 1; } 
+        }
 
-        .typing-indicator { display: flex; gap: 4px; padding: 10px; }
-        .dot { width: 6px; height: 6px; background: #cbd5e1; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
+        .typing-indicator { 
+            display: flex; 
+            gap: 4px; 
+            padding: 10px; 
+        }
+        .dot { 
+            width: 6px; 
+            height: 6px; 
+            background: #cbd5e1; 
+            border-radius: 50%; 
+            animation: bounce 1.4s infinite ease-in-out; 
+        }
         .dot:nth-child(2) { animation-delay: 0.2s; }
         .dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
+        
+        @keyframes bounce { 
+            0%, 80%, 100% { transform: translateY(0); } 
+            40% { transform: translateY(-6px); } 
+        }
 
         .mode-toggle {
             display: flex;
@@ -98,6 +114,7 @@
             font-size: 11px;
             font-weight: bold;
             transition: all 0.2s;
+            cursor: pointer;
         }
         .mode-btn.active {
             background: white;
@@ -108,10 +125,28 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        #sendBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .error-message {
+            color: #ef4444;
+            font-size: 14px;
+            padding: 10px;
+            text-align: center;
+            background: #fee2e2;
+            border-radius: 12px;
+            margin: 10px;
+        }
     </style>
 </head>
 <body>
-
     <div class="app-shell">
         <header class="p-6 text-white flex justify-between items-start">
             <div class="flex items-center gap-3">
@@ -198,6 +233,11 @@
                         </button>
                     </div>
                 </div>
+                
+                <!-- API Status Indicator -->
+                <div id="apiStatus" class="text-center text-xs text-gray-400 mt-2">
+                    ກຳລັງກວດສອບການເຊື່ອມຕໍ່...
+                </div>
             </div>
 
             <!-- View: Chat Window -->
@@ -229,56 +269,85 @@
     </div>
 
     <script>
-        // กำหนด API endpoint - เมื่อ deploy แล้วจะเปลี่ยนเป็น URL จริง
-        const API_BASE_URL = window.location.origin; // ใช้โดเมนปัจจุบัน
+        // ກຳນົດຄ່າ API - ໃຊ້ relative path ສະເໝີ
+        const API_BASE_URL = ''; // ໃຊ້ empty string ເພື່ອໃຫ້ relative path
         
+        // State variables
         let currentLevel = "primary";
         let responseMode = "detailed"; 
+        let isSending = false; // ປ້ອງກັນການສົ່ງຊ້ຳ
+        
+        // DOM elements
         const chatBody = document.getElementById('chatBody');
         const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const apiStatus = document.getElementById('apiStatus');
 
+        // Event listeners
         userInput.addEventListener("keypress", (e) => { 
-            if (e.key === "Enter") sendMessage(); 
+            if (e.key === "Enter" && !isSending) sendMessage(); 
         });
 
+        // ເມື່ອໂຫຼດໜ້າສຳເລັດ
         window.onload = function() {
+            checkAPIStatus();
             getFunFact();
         };
 
-        // ฟังก์ชันเรียก API จาก backend
-        async function callGeminiAPI(userMessage, systemPrompt) {
+        // ກວດສອບການເຊື່ອມຕໍ່ API
+        async function checkAPIStatus() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/gemini`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        userMessage: userMessage,
-                        systemPrompt: systemPrompt
-                    })
+                const response = await fetch('/api/gemini', {
+                    method: 'OPTIONS'
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                if (response.ok) {
+                    apiStatus.innerText = '✅ ພ້ອມໃຊ້ງານ';
+                    apiStatus.classList.add('text-green-500');
+                } else {
+                    throw new Error('API not responding');
                 }
-
-                const data = await response.json();
-                return {
-                    candidates: [{
-                        content: {
-                            parts: [{ text: data.text }]
-                        }
-                    }]
-                };
             } catch (error) {
-                console.error('API call failed:', error);
-                throw error;
+                apiStatus.innerText = '⚠️ ກຳລັງກວດສອບ...';
+                // ລອງເຮັດອີກຄັ້ງຫຼັງຈາກ 3 ວິນາທີ
+                setTimeout(checkAPIStatus, 3000);
             }
         }
 
-        // ฟังก์ชันสุ่มหัวข้อเพื่อความหลากหลาย (แก้ไขให้ใช้ API)
+        // ຟັງຊັນເອື້ນ API จาก backend
+        async function callGeminiAPI(userMessage, systemPrompt) {
+            const response = await fetch('/api/gemini', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userMessage: userMessage,
+                    systemPrompt: systemPrompt
+                })
+            });
+
+            if (!response.ok) {
+                let errorMessage = `HTTP error! status: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch (e) {
+                    // ຖ້າ parse JSON ບໍ່ໄດ້ ໃຊ້ error message ປົກກະຕິ
+                }
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            return {
+                candidates: [{
+                    content: {
+                        parts: [{ text: data.text }]
+                    }
+                }]
+            };
+        }
+
+        // ຟັງຊັນສຸ່ມຫົວຂໍ້ເພື່ອຄວາມຫຼາກຫຼາຍ
         async function getFunFact() {
             const textEl = document.getElementById('funFactText');
             const statusEl = document.getElementById('factStatus');
@@ -302,11 +371,11 @@
             try {
                 const data = await callGeminiAPI(prompt, systemPrompt);
                 textEl.innerText = data.candidates[0].content.parts[0].text;
-                statusEl.innerText = "Updated";
+                statusEl.innerText = "✅ ອັບເດດແລ້ວ";
             } catch (error) {
                 console.error('Fun Fact error:', error);
                 textEl.innerText = "ຄະນິດສາດແມ່ນພາສາຂອງຈັກກະວານ ແລະ ຄວາມງາມທີ່ຢູ່ອ້ອມຕົວເຮົາ.";
-                statusEl.innerText = "Error";
+                statusEl.innerText = "⚠️ ລອງໃໝ່";
             }
         }
 
@@ -330,7 +399,11 @@
 
         function startChat(level) {
             currentLevel = level;
-            const titles = { primary: 'ຊັ້ນປະຖົມ', middle: 'ຊັ້ນມັດທະຍົມຕົ້ນ', high: 'ຊັ້ນມັດທະຍົມປາຍ' };
+            const titles = { 
+                primary: 'ຊັ້ນປະຖົມ', 
+                middle: 'ຊັ້ນມັດທະຍົມຕົ້ນ', 
+                high: 'ຊັ້ນມັດທະຍົມປາຍ' 
+            };
             document.getElementById('chatLevelTitle').innerText = titles[level];
             toggleView('chat');
             chatBody.innerHTML = '';
@@ -341,6 +414,7 @@
             const div = document.createElement('div');
             div.className = `bubble ${isAi ? 'bubble-ai shadow-sm' : 'bubble-user shadow-md'}`;
             if (isAi) {
+                // ແປງ **text** ເປັນ <b>text</b> ແລະຂຶ້ນບັນທັດໃໝ່
                 div.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
             } else {
                 div.innerText = text;
@@ -360,7 +434,12 @@
 
         async function sendMessage() {
             const text = userInput.value.trim();
-            if (!text) return;
+            if (!text || isSending) return;
+
+            // Disable input while sending
+            isSending = true;
+            sendBtn.disabled = true;
+            userInput.disabled = true;
 
             addMessage(text, false);
             userInput.value = '';
@@ -415,16 +494,39 @@
                 document.getElementById('typing')?.remove();
                 console.error("Chat Error Details:", error);
                 
-                // จัดการ error ต่างๆ
+                // ຈັດການ error ຕ່າງໆ
                 let errorMessage = "ຂໍໂທດເດີລູກຮັກ, ຄູພົບຂໍ້ຜິດພາດ. ກະລຸນາລອງຖາມຄູໃໝ່ອີກບາດນະລູກ.";
                 
-                if (error.message && error.message.includes("429")) {
-                    errorMessage = "ຂໍໂທດເດີລູກຮັກ, ຕອນນີ້ມີຄົນຖາມຄູຫຼາຍເກີນໄປ. ກະລຸນາລໍຖ້າ 1 ນາທີ ແລ້ວລອງຖາມໃໝ່ນະລູກ.";
+                if (error.message) {
+                    if (error.message.includes("429")) {
+                        errorMessage = "ຂໍໂທດເດີລູກຮັກ, ຕອນນີ້ມີຄົນຖາມຄູຫຼາຍເກີນໄປ. ກະລຸນາລໍຖ້າ 1 ນາທີ ແລ້ວລອງຖາມໃໝ່ນະລູກ.";
+                    } else if (error.message.includes("500")) {
+                        errorMessage = "ຂໍໂທດເດີລູກຮັກ, ເຊີບເວີມີບັນຫາ. ກະລຸນາລອງໃໝ່ພາຍຫຼັງ.";
+                    } else if (error.message.includes("API Key")) {
+                        errorMessage = "ຂໍໂທດເດີລູກຮັກ, ບັນຫາການຕັ້ງຄ່າ API. ກະລຸນາຕິດຕໍ່ຜູ້ດູແລລະບົບ.";
+                    }
                 }
                 
                 addMessage(errorMessage, true);
+            } finally {
+                // Re-enable input
+                isSending = false;
+                sendBtn.disabled = false;
+                userInput.disabled = false;
+                userInput.focus();
             }
         }
+
+        // ເພີ່ມຟັງຊັນສຳລັບ reload ເມື່ອມີ error
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled rejection:', event.reason);
+            // ສະແດງ error ເບົາໆ ໂດຍບໍ່ເຮັດໃຫ້ໜ້າເວັບເສຍຫາຍ
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerText = 'ເກີດຂໍ້ຜິດພາດບາງຢ່າງ, ກະລຸນາໂຫຼດໜ້າໃໝ່';
+            document.body.appendChild(errorDiv);
+            setTimeout(() => errorDiv.remove(), 5000);
+        });
     </script>
 </body>
 </html>
